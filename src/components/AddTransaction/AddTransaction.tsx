@@ -11,9 +11,13 @@ import {
   Tab,
   Tabs,
   MenuItem,
+  CircularProgress,
+  Snackbar,
+  Alert,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs, { Dayjs } from 'dayjs';
+import { createTransaction } from '../../services/api';
 
 const categories = [
   'Bill',
@@ -30,6 +34,12 @@ interface FormData {
   description: string;
   date: Dayjs | null;
   category: string;
+}
+
+interface AlertState {
+  open: boolean;
+  message: string;
+  severity: 'success' | 'error';
 }
 
 const StyledDialog = styled(Dialog)`
@@ -124,6 +134,12 @@ const AddTransaction: React.FC<AddTransactionProps> = ({ open, onClose, onAdd })
     date: dayjs(),
     category: categories[0],
   });
+  const [loading, setLoading] = useState(false);
+  const [alert, setAlert] = useState<AlertState>({
+    open: false,
+    message: '',
+    severity: 'success',
+  });
 
   const resetForm = () => {
     setFormData({
@@ -141,121 +157,201 @@ const AddTransaction: React.FC<AddTransactionProps> = ({ open, onClose, onAdd })
     resetForm();
   };
 
+  const handleAlertClose = () => {
+    setAlert(prev => ({ ...prev, open: false }));
+  };
+
   const handleChange = (field: keyof FormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleSubmit = () => {
-    if (onAdd && formData.date) {
-      onAdd({
-        type: formData.type === 0 ? 'cashIn' : 'cashOut',
-        amount: parseFloat(formData.amount),
-        date: formData.date.toDate(),
+  const handleSubmit = async () => {
+    if (!formData.date || !isValid) return;
+
+    setLoading(true);
+    try {
+      const isCashIn = formData.type === 0;
+      
+      // Get current timestamp for lastactivity
+      const currentTimestamp = Date.now();
+      
+      // Get selected date's timestamp for transaction-date
+      const selectedDate = formData.date.valueOf();
+      
+      const transactionData = {
         category: formData.category,
-        receiverName: formData.receiverName,
-        description: formData.description,
+        customFields: [
+          {
+            fieldKey: 'transaction-date',
+            fieldValue: selectedDate.toString(),
+            fieldValueType: 'STRING'
+          },
+          {
+            fieldKey: 'lastactivity',
+            fieldValue: currentTimestamp.toString(),
+            fieldValueType: 'STRING'
+          }
+        ],
+        receiverName: isCashIn ? '' : formData.receiverName,
+        senderName: isCashIn ? formData.receiverName : '',
+        reason: formData.description,
+        amount: parseFloat(formData.amount),
+        updates: [],
+        amountIn: isCashIn,
+        orgId: 'ORG123'
+      };
+
+      const response = await createTransaction(transactionData);
+      
+      setAlert({
+        open: true,
+        message: 'Transaction added successfully',
+        severity: 'success'
       });
+
+      if (onAdd) {
+        onAdd({
+          type: isCashIn ? 'cashIn' : 'cashOut',
+          amount: parseFloat(formData.amount),
+          date: formData.date.toDate(),
+          category: formData.category,
+          receiverName: formData.receiverName,
+          description: formData.description,
+        });
+      }
+      handleClose();
+    } catch (error) {
+      console.error('Failed to create transaction:', error);
+      setAlert({
+        open: true,
+        message: error instanceof Error ? error.message : 'Failed to create transaction',
+        severity: 'error'
+      });
+    } finally {
+      setLoading(false);
     }
-    handleClose();
   };
 
   const isValid = formData.amount && formData.date && formData.category && formData.receiverName;
 
   return (
-    <StyledDialog open={open} onClose={handleClose}>
-      <StyledDialogTitle>Add Transaction</StyledDialogTitle>
-      
-      <DialogContent>
-        <StyledTabs
-          value={formData.type}
-          onChange={(_, newValue: number) => handleChange('type', newValue)}
-          variant="fullWidth"
-        >
-          <StyledTab label="Cash In" />
-          <StyledTab label="Cash Out" />
-        </StyledTabs>
+    <>
+      <StyledDialog open={open} onClose={handleClose}>
+        <StyledDialogTitle>Add Transaction</StyledDialogTitle>
+        
+        <DialogContent>
+          <StyledTabs
+            value={formData.type}
+            onChange={(_, newValue: number) => handleChange('type', newValue)}
+            variant="fullWidth"
+          >
+            <StyledTab label="Cash In" />
+            <StyledTab label="Cash Out" />
+          </StyledTabs>
 
-        <FormField>
-          <TextField
-            label="Amount"
-            type="number"
-            value={formData.amount}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange('amount', e.target.value)}
-            placeholder="Enter amount"
-          />
-        </FormField>
+          <FormField>
+            <TextField
+              label="Amount"
+              type="number"
+              value={formData.amount}
+              onChange={(e) => handleChange('amount', e.target.value)}
+              placeholder="Enter amount"
+            />
+          </FormField>
 
-        <FormField>
-          <TextField
-            label="Receiver Name"
-            value={formData.receiverName}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange('receiverName', e.target.value)}
-            placeholder="Enter receiver name"
-          />
-        </FormField>
+          <FormField>
+            <TextField
+              label={formData.type === 0 ? "Sender Name" : "Receiver Name"}
+              value={formData.receiverName}
+              onChange={(e) => handleChange('receiverName', e.target.value)}
+              placeholder={formData.type === 0 ? "Enter sender name" : "Enter receiver name"}
+            />
+          </FormField>
 
-        <FormField>
-          <TextField
-            label="Description"
-            value={formData.description}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange('description', e.target.value)}
-            placeholder="Enter description"
-            multiline
-            rows={2}
-          />
-        </FormField>
+          <FormField>
+            <TextField
+              label="Description"
+              value={formData.description}
+              onChange={(e) => handleChange('description', e.target.value)}
+              placeholder="Enter description"
+              multiline
+              rows={2}
+            />
+          </FormField>
 
-        <FormField>
-          <DatePicker
-            label="Date"
-            value={formData.date}
-            onChange={(newDate: Dayjs | null) => handleChange('date', newDate)}
-            slotProps={{
-              textField: {
-                fullWidth: true,
+          <FormField>
+            <DatePicker
+              label="Date"
+              value={formData.date}
+              onChange={(newDate: Dayjs | null) => handleChange('date', newDate)}
+              slotProps={{
+                textField: {
+                  fullWidth: true,
+                }
+              }}
+            />
+          </FormField>
+
+          <FormField>
+            <TextField
+              select
+              label="Category"
+              value={formData.category}
+              onChange={(e) => handleChange('category', e.target.value)}
+            >
+              {categories.map((cat) => (
+                <MenuItem key={cat} value={cat}>
+                  {cat}
+                </MenuItem>
+              ))}
+            </TextField>
+          </FormField>
+        </DialogContent>
+
+        <DialogActions sx={{ padding: 2, gap: 1 }}>
+          <ActionButton 
+            onClick={handleClose}
+            sx={{ color: 'rgba(255, 255, 255, 0.7)' }}
+            disabled={loading}
+          >
+            Cancel
+          </ActionButton>
+          <ActionButton 
+            onClick={handleSubmit}
+            disabled={!isValid || loading}
+            sx={{
+              background: isValid ? 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)' : 'rgba(255, 255, 255, 0.1)',
+              color: 'white',
+              '&:hover': {
+                background: isValid ? 'linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)' : 'rgba(255, 255, 255, 0.15)'
               }
             }}
-          />
-        </FormField>
-
-        <FormField>
-          <TextField
-            select
-            label="Category"
-            value={formData.category}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange('category', e.target.value)}
           >
-            {categories.map((cat) => (
-              <MenuItem key={cat} value={cat}>
-                {cat}
-              </MenuItem>
-            ))}
-          </TextField>
-        </FormField>
-      </DialogContent>
+            {loading ? (
+              <CircularProgress size={24} color="inherit" />
+            ) : (
+              'Add Transaction'
+            )}
+          </ActionButton>
+        </DialogActions>
+      </StyledDialog>
 
-      <DialogActions sx={{ padding: 2, gap: 1 }}>
-        <ActionButton 
-          onClick={handleClose}
-          sx={{ color: 'rgba(255, 255, 255, 0.7)' }}
+      <Snackbar
+        open={alert.open}
+        autoHideDuration={6000}
+        onClose={handleAlertClose}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert 
+          onClose={handleAlertClose} 
+          severity={alert.severity}
+          variant="filled"
+          sx={{ width: '100%' }}
         >
-          Cancel
-        </ActionButton>
-        <ActionButton 
-          onClick={handleSubmit}
-          disabled={!isValid}
-          sx={{
-            background: isValid ? 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)' : 'rgba(255, 255, 255, 0.1)',
-            color: 'white',
-            '&:hover': {
-              background: isValid ? 'linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)' : 'rgba(255, 255, 255, 0.15)'
-            }
-          }}
-        >
-          Add Transaction
-        </ActionButton>
-      </DialogActions>
-    </StyledDialog>
+          {alert.message}
+        </Alert>
+      </Snackbar>
+    </>
   );
 };
 
