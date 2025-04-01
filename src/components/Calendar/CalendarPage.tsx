@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Button, Snackbar, Alert } from '@mui/material';
-import { CalendarEvent, updateEvent, markEventCompleted, fetchMonthEvents } from '../../services/eventService';
+import { CalendarEvent, updateEvent, fetchMonthEvents } from '../../services/eventService';
 import EditEventDialog from '../Calendar/EditEventDialog';
 import EventListDialog from '../Calendar/EventListDialog';
 import dayjs from 'dayjs';
@@ -50,7 +50,6 @@ export const CalendarPage = () => {
 
   const handleUpdateEvent = async (updatedEvent: CalendarEvent) => {
     try {
-      // Format the event data to match the expected type
       const eventData = {
         eventName: updatedEvent.eventName,
         eventDate: updatedEvent.eventDate,
@@ -59,19 +58,16 @@ export const CalendarPage = () => {
       
       const response = await updateEvent(updatedEvent.eventId, eventData);
       if (response.eventId) {
-        // Close all dialogs and clear state
         setShowEditEvent(false);
         setShowEventList(false);
         setSelectedEvent(null);
 
-        // Show success message
         setSnackbar({
           open: true,
           message: 'Changes updated successfully',
           severity: 'success'
         });
 
-        // Refresh events
         await loadMonthEvents(currentDate);
       }
     } catch (error) {
@@ -88,40 +84,19 @@ export const CalendarPage = () => {
     setSnackbar(prev => ({ ...prev, open: false }));
   };
 
-  const handleMarkCompleted = async (event: CalendarEvent) => {
-    try {
-      console.log('Attempting to mark event as completed:', event);
-      
-      if (!event.eventId) {
-        console.error('Cannot mark event as completed: No event ID', event);
-        setSnackbar({
-          open: true,
-          message: 'Cannot mark event as completed: Missing event ID',
-          severity: 'error'
-        });
-        return;
-      }
+  const handleMarkCompleted = async (updatedEvent: CalendarEvent) => {
+    // Only update local state, don't trigger a server refresh
+    setEvents(prevEvents => 
+      prevEvents.map(event => 
+        event.eventId === updatedEvent.eventId ? updatedEvent : event
+      )
+    );
 
-      console.log('Calling markEventCompleted with ID:', event.eventId);
-      const response = await markEventCompleted(event.eventId);
-      
-      if (response) {
-        setSnackbar({
-          open: true,
-          message: 'Event marked as completed',
-          severity: 'success'
-        });
-        // Refresh events after marking as completed
-        loadMonthEvents(currentDate);
-      }
-    } catch (error) {
-      console.error('Error marking event as completed:', error);
-      setSnackbar({
-        open: true,
-        message: 'Failed to mark event as completed',
-        severity: 'error'
-      });
-    }
+    setSnackbar({
+      open: true,
+      message: `Event marked as ${updatedEvent.eventCompleted ? 'completed' : 'not completed'}`,
+      severity: 'success'
+    });
   };
 
   return (
@@ -131,7 +106,6 @@ export const CalendarPage = () => {
         onClose={() => {
           setShowEditEvent(false);
           setSelectedEvent(null);
-          // Don't reopen event list when canceling edit
         }}
         event={selectedEvent}
         onSave={handleUpdateEvent}

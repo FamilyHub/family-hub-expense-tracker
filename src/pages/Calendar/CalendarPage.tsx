@@ -6,11 +6,11 @@ import MonthCalendar from '../../components/Calendar/MonthCalendar';
 import CalendarHeader from '../../components/Calendar/CalendarHeader';
 import AddTransaction from '../../components/AddTransaction/AddTransaction';
 import AddEvent, { EventData } from '../../components/Calendar/AddEvent';
-import { addEvent, fetchMonthEvents, CalendarEvent } from '../../services/eventService';
+import { addEvent, fetchMonthEvents, CalendarEvent, updateEvent, updateEventStatus } from '../../services/eventService';
 import EventListDialog from '../../components/Calendar/EventListDialog';
 import EditEventDialog from '../../components/Calendar/EditEventDialog';
-import { updateEvent, markEventCompleted } from '../../services/eventService';
 import dayjs from 'dayjs';
+import RemoveEventsDialog from '../../components/Calendar/RemoveEventsDialog';
 
 const PageContainer = styled(Box)`
   display: flex;
@@ -28,6 +28,7 @@ const CalendarPage: React.FC = () => {
   const [showEditEvent, setShowEditEvent] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [selectedDateEvents, setSelectedDateEvents] = useState<CalendarEvent[]>([]);
+  const [showRemoveEvents, setShowRemoveEvents] = useState(false);
 
   const loadMonthEvents = async (date: Date) => {
     const start = startOfMonth(date);
@@ -58,9 +59,12 @@ const CalendarPage: React.FC = () => {
   };
 
   const handleRemoveEvent = () => {
-    if (selectedDate) {
-      console.log('Removing event for:', format(selectedDate, 'dd MMM yyyy', { locale: enIN }));
-    }
+    setShowRemoveEvents(true);
+  };
+
+  const handleEventsDeleted = () => {
+    // Refresh events after deletion
+    loadMonthEvents(currentDate);
   };
 
   const handleEventSave = async (eventData: EventData) => {
@@ -109,23 +113,20 @@ const CalendarPage: React.FC = () => {
     }
   };
 
-  const handleMarkCompleted = async (event: CalendarEvent) => {
-    try {
-      console.log('Attempting to mark event as completed:', event);
-      
-      if (!event.eventId) {
-        console.error('Cannot mark event as completed: No event ID', event);
-        return;
-      }
-
-      console.log('Calling markEventCompleted with ID:', event.eventId);
-      await markEventCompleted(event.eventId);
-      
-      // Refresh events after marking as completed
-      loadMonthEvents(currentDate);
-    } catch (error) {
-      console.error('Error marking event as completed:', error);
-    }
+  const handleMarkCompleted = (updatedEvent: CalendarEvent) => {
+    // Only update the local state
+    setEvents(prevEvents => 
+      prevEvents.map(event => 
+        event.eventId === updatedEvent.eventId ? updatedEvent : event
+      )
+    );
+    
+    // Also update selectedDateEvents to reflect the change immediately
+    setSelectedDateEvents(prevEvents =>
+      prevEvents.map(event =>
+        event.eventId === updatedEvent.eventId ? updatedEvent : event
+      )
+    );
   };
 
   const dateRangeText = format(currentDate, 'MMMM yyyy', { locale: enIN });
@@ -164,6 +165,12 @@ const CalendarPage: React.FC = () => {
         }}
         event={selectedEvent}
         onSave={handleUpdateEvent}
+      />
+
+      <RemoveEventsDialog
+        open={showRemoveEvents}
+        onClose={() => setShowRemoveEvents(false)}
+        onEventsDeleted={handleEventsDeleted}
       />
 
       <AddTransaction 

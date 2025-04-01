@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -12,12 +12,11 @@ import {
   IconButton,
   Box,
   Typography,
-  Tooltip,
   styled
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import { CalendarEvent, markEventCompleted } from '../../services/eventService';
+import { CalendarEvent } from '../../services/eventService';
+import { useEventStatus } from '../../hooks/useEventStatus';
 import dayjs from 'dayjs';
 
 interface EventListDialogProps {
@@ -47,6 +46,19 @@ const EventListItem = styled(ListItem)`
   }
 `;
 
+const StatusButton = styled(Button)(({ completed }: { completed: boolean }) => ({
+  minWidth: '160px',
+  backgroundColor: completed ? '#4ade80' : '#ef4444',
+  color: 'white',
+  '&:hover': {
+    backgroundColor: completed ? '#22c55e' : '#dc2626',
+  },
+  '&.Mui-disabled': {
+    backgroundColor: completed ? 'rgba(74, 222, 128, 0.5)' : 'rgba(239, 68, 68, 0.5)',
+    color: 'rgba(255, 255, 255, 0.7)'
+  }
+}));
+
 const EventListDialog: React.FC<EventListDialogProps> = ({
   open,
   onClose,
@@ -55,150 +67,95 @@ const EventListDialog: React.FC<EventListDialogProps> = ({
   onEditEvent,
   onMarkCompleted
 }) => {
-  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
-  const [confirmationOpen, setConfirmationOpen] = useState(false);
-  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const { updateStatus, isLoading } = useEventStatus();
 
   const handleEditClick = (event: CalendarEvent) => {
-    setEditingEvent(event);
     onEditEvent(event);
   };
 
-  const handleMarkCompletedClick = (event: CalendarEvent) => {
-    setSelectedEvent(event);
-    setConfirmationOpen(true);
-  };
+  const handleStatusClick = async (event: CalendarEvent) => {
+    if (isLoading) return;
 
-  const handleConfirmComplete = async () => {
-    if (selectedEvent) {
-      setIsLoading(true);
-      try {
-        await markEventCompleted(selectedEvent.eventId);
-        onMarkCompleted(selectedEvent);
-      } catch (error) {
-        console.error('Error marking event as complete:', error);
-      } finally {
-        setIsLoading(false);
-      }
+    // If event is not completed, we want to mark it as completed (true)
+    // If event is completed, we want to mark it as not completed (false)
+    const targetStatus = !event.eventCompleted;
+    const success = await updateStatus(event, targetStatus);
+    
+    if (success) {
+      onMarkCompleted({
+        ...event,
+        eventCompleted: targetStatus
+      });
     }
-    setConfirmationOpen(false);
-    setSelectedEvent(null);
-  };
-
-  const handleCancelComplete = () => {
-    setConfirmationOpen(false);
-    setSelectedEvent(null);
   };
 
   return (
-    <>
-      <StyledDialog
-        open={open}
-        onClose={onClose}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle sx={{ color: 'white', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
-          Events for {dayjs(selectedDate).format('MMMM D, YYYY')}
-        </DialogTitle>
-        <DialogContent sx={{ p: 0 }}>
-          {events.length === 0 ? (
-            <Box sx={{ p: 3, textAlign: 'center' }}>
-              <Typography color="text.secondary">No events for this date</Typography>
-            </Box>
-          ) : (
-            <List>
-              {events.map((event, index) => (
-                <EventListItem key={index}>
-                  <ListItemText
-                    primary={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography variant="subtitle1" sx={{ color: 'white' }}>
-                          {event.eventName}
-                        </Typography>
-                        {event.eventCompleted && (
-                          <CheckCircleIcon color="success" fontSize="small" />
-                        )}
-                      </Box>
-                    }
-                    secondary={
-                      <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>
-                        {dayjs(event.eventDate).format('h:mm A')}
+    <StyledDialog
+      open={open}
+      onClose={onClose}
+      maxWidth="sm"
+      fullWidth
+    >
+      <DialogTitle sx={{ color: 'white', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
+        Events for {dayjs(selectedDate).format('MMMM D, YYYY')}
+      </DialogTitle>
+      <DialogContent sx={{ p: 0 }}>
+        {events.length === 0 ? (
+          <Box sx={{ p: 3, textAlign: 'center' }}>
+            <Typography color="text.secondary">No events for this date</Typography>
+          </Box>
+        ) : (
+          <List>
+            {events.map((event, index) => (
+              <EventListItem key={index}>
+                <ListItemText
+                  primary={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography variant="subtitle1" sx={{ color: 'white' }}>
+                        {event.eventName}
                       </Typography>
-                    }
-                  />
-                  <ListItemSecondaryAction>
-                    <Tooltip title="Mark as Completed">
-                      <IconButton
-                        edge="end"
-                        onClick={() => handleMarkCompletedClick(event)}
-                        sx={{ mr: 1, color: event.eventCompleted ? 'success.main' : 'rgba(255, 255, 255, 0.5)' }}
-                      >
-                        <CheckCircleIcon />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Edit Event">
-                      <IconButton
-                        edge="end"
-                        onClick={() => handleEditClick(event)}
-                        sx={{ color: 'rgba(255, 255, 255, 0.5)' }}
-                      >
-                        <EditIcon />
-                      </IconButton>
-                    </Tooltip>
-                  </ListItemSecondaryAction>
-                </EventListItem>
-              ))}
-            </List>
-          )}
-        </DialogContent>
-        <DialogActions sx={{ p: 2, borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
-          <Button onClick={onClose} sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>
-            Close
-          </Button>
-        </DialogActions>
-      </StyledDialog>
-
-      <Dialog
-        open={confirmationOpen}
-        onClose={handleCancelComplete}
-        PaperProps={{
-          sx: {
-            background: 'rgba(30, 41, 59, 0.95)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            borderRadius: '12px',
-            backdropFilter: 'blur(10px)'
-          }
-        }}
-      >
-        <DialogTitle sx={{ color: 'white' }}>
-          Confirm Action
-        </DialogTitle>
-        <DialogContent>
-          <Typography sx={{ color: 'white' }}>
-            Are you sure you want to mark this event as complete?
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button 
-            onClick={handleCancelComplete} 
-            sx={{ color: 'rgba(255, 255, 255, 0.7)' }}
-            disabled={isLoading}
-          >
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleConfirmComplete} 
-            variant="contained" 
-            color="primary"
-            disabled={isLoading}
-          >
-            {isLoading ? 'Marking...' : 'Yes'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </>
+                    </Box>
+                  }
+                  secondary={
+                    <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                      {dayjs(event.eventDate).format('h:mm A')}
+                    </Typography>
+                  }
+                />
+                <ListItemSecondaryAction sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                  <StatusButton
+                    completed={event.eventCompleted}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleStatusClick(event);
+                    }}
+                    disabled={isLoading}
+                    size="small"
+                  >
+                    {event.eventCompleted ? 'Mark as not completed' : 'Mark as completed'}
+                  </StatusButton>
+                  <IconButton
+                    edge="end"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEditClick(event);
+                    }}
+                    sx={{ color: 'rgba(255, 255, 255, 0.5)' }}
+                  >
+                    <EditIcon />
+                  </IconButton>
+                </ListItemSecondaryAction>
+              </EventListItem>
+            ))}
+          </List>
+        )}
+      </DialogContent>
+      <DialogActions sx={{ p: 2, borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
+        <Button onClick={onClose} sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+          Close
+        </Button>
+      </DialogActions>
+    </StyledDialog>
   );
 };
 

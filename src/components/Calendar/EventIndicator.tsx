@@ -10,10 +10,10 @@ interface EventIndicatorProps {
   children: React.ReactNode; // Add children prop to wrap the date cell
 }
 
-const IndicatorDot = styled(Box)`
+const IndicatorDot = styled(Box)<{ completed?: boolean }>`
   width: 4px;
   height: 4px;
-  background-color: #6366f1;
+  background-color: ${props => props.completed ? '#4ade80' : '#6366f1'};
   border-radius: 50%;
   margin: 1px;
 `;
@@ -75,8 +75,8 @@ const EventIndicator: React.FC<EventIndicatorProps> = ({ events, date, children 
         {children}
         {dayEvents.length > 0 && (
           <DotsContainer>
-            {dayEvents.map((_, index) => (
-              <IndicatorDot key={index} />
+            {dayEvents.map((event, index) => (
+              <IndicatorDot key={index} completed={event.eventCompleted} />
             ))}
           </DotsContainer>
         )}

@@ -32,9 +32,20 @@ export interface CalendarEvent {
   eventDate: number;
   customFields: CustomField[];
   userId: string;
-  allowNotification: boolean;
-  allowToSeeThisEvent: boolean;
+  isAllowNotification: boolean;
+  isAllowToSeeThisEvent: boolean;
   eventCompleted: boolean;
+}
+
+export interface BulkEventResponse {
+  successList: CalendarEvent[];
+  failureList: ResourceInfo[];
+}
+
+export interface ResourceInfo {
+  eventId: string;
+  eventName: string;
+  failureReason: string;
 }
 
 export const addEvent = async (eventData: {
@@ -155,29 +166,64 @@ export const updateEvent = async (eventId: string, eventData: {
   }
 };
 
-export const markEventCompleted = async (eventId: string) => {
+export const updateEventStatus = async (eventId: string, status: boolean): Promise<any> => {
   try {
-    const requestData = {
-      eventId: eventId,
-      eventCompleted: true
-    };
-
-    const response = await fetch(`${API_ENDPOINTS.events.base}/${eventId}/status?status=true`, {
+    const response = await fetch(`${API_ENDPOINTS.events.base}/${eventId}/status?status=${status}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
         'userId': 'user123'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to update event status');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error updating event status:', error);
+    throw error;
+  }
+};
+
+export const getEventsByDateRange = async (startDate: number, endDate: number): Promise<CalendarEvent[]> => {
+  try {
+    const response = await fetch(`${API_ENDPOINTS.events.base}/events-date-wise?startDate=${startDate}&endDate=${endDate}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify(requestData)
     });
 
     if (!response.ok) {
-      throw new Error('Failed to mark event as completed');
+      throw new Error('Failed to fetch events by date range');
     }
 
     return await response.json();
   } catch (error) {
-    console.error('Error marking event as completed:', error);
+    console.error('Error fetching events by date range:', error);
+    throw error;
+  }
+};
+
+export const bulkDeleteEvents = async (eventIds: string[]): Promise<BulkEventResponse> => {
+  try {
+    const response = await fetch(`${API_ENDPOINTS.events.base}/bulk`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(eventIds),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to delete events');
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error deleting events:', error);
     throw error;
   }
 }; 
