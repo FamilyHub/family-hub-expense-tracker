@@ -162,7 +162,7 @@ export const markEventCompleted = async (eventId: string) => {
       eventCompleted: true
     };
 
-    const response = await fetch(`${API_ENDPOINTS.events.base}/${eventId}/status`, {
+    const response = await fetch(`${API_ENDPOINTS.events.base}/${eventId}/status?status=true`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
