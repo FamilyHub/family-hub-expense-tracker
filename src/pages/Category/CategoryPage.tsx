@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
-import { Box, styled, MenuItem, TextField, Paper, Typography } from '@mui/material';
+import { Box, styled, MenuItem, TextField, Paper, Typography, CircularProgress, Alert } from '@mui/material';
 import AddTransaction from '../../components/AddTransaction/AddTransaction';
+import { useCategory } from '../../hooks/useCategory';
+import { Transaction } from '../../services/transactionService';
+import dayjs from 'dayjs';
 
 const PageContainer = styled(Box)`
   display: flex;
@@ -87,40 +90,47 @@ const categories = [
   'EMIs',
 ];
 
-// Mock data - replace with actual data later
-const mockTransactions = [
-  {
-    id: 1,
-    type: 'cashOut' as const,
-    amount: 1500,
-    receiverName: 'John Doe',
-    description: 'Monthly electricity bill',
-    category: 'Bill',
-    date: new Date(),
-  },
-  {
-    id: 2,
-    type: 'cashIn' as const,
-    amount: 5000,
-    receiverName: 'Jane Smith',
-    description: 'Loan repayment',
-    category: 'Loan',
-    date: new Date(),
-  },
-];
-
 const CategoryPage: React.FC = () => {
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [showAddTransaction, setShowAddTransaction] = useState(false);
+  const {
+    transactions,
+    loading,
+    error,
+    selectedCategory,
+    setSelectedCategory,
+    refreshTransactions
+  } = useCategory();
 
-  const filteredTransactions = selectedCategory
-    ? mockTransactions.filter(t => t.category === selectedCategory)
-    : mockTransactions;
-
-  const handleAddTransaction = (data: any) => {
+  const handleAddTransaction = async (data: any) => {
     console.log('Category transaction:', data);
     setShowAddTransaction(false);
+    // Refresh transactions after adding a new one
+    refreshTransactions();
   };
+
+  const getTransactionDate = (transaction: Transaction) => {
+    const lastActivityField = transaction.customFields.find(field => field.fieldKey === 'lastactivity');
+    if (lastActivityField) {
+      return dayjs(parseInt(lastActivityField.fieldValue)).format('MMM D, YYYY');
+    }
+    return 'N/A';
+  };
+
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Alert severity="error">{error}</Alert>
+      </Box>
+    );
+  }
 
   return (
     <PageContainer>
@@ -131,7 +141,7 @@ const CategoryPage: React.FC = () => {
         onChange={(e) => setSelectedCategory(e.target.value)}
         fullWidth
       >
-        <MenuItem value="">All Categories</MenuItem>
+        <MenuItem value="All Categories">All Categories</MenuItem>
         {categories.map((category) => (
           <MenuItem key={category} value={category}>
             {category}
@@ -140,37 +150,37 @@ const CategoryPage: React.FC = () => {
       </CategorySelector>
 
       <TransactionList>
-        {filteredTransactions.map((transaction) => (
-          <TransactionCard key={transaction.id}>
-            <TransactionDetails>
-              <Amount type={transaction.type}>
-                {transaction.type === 'cashIn' ? '+' : '-'}₹{transaction.amount}
-              </Amount>
-              <Box>
-                <Label>Receiver Name</Label>
-                <Value>{transaction.receiverName}</Value>
-              </Box>
-              <Box>
-                <Label>Description</Label>
-                <Value>{transaction.description}</Value>
-              </Box>
-              <Box>
-                <Label>Category</Label>
-                <Value>{transaction.category}</Value>
-              </Box>
-              <Box>
-                <Label>Date</Label>
-                <Value>
-                  {transaction.date.toLocaleDateString('en-IN', {
-                    day: 'numeric',
-                    month: 'short',
-                    year: 'numeric',
-                  })}
-                </Value>
-              </Box>
-            </TransactionDetails>
-          </TransactionCard>
-        ))}
+        {transactions.length === 0 ? (
+          <Typography color="text.secondary" sx={{ textAlign: 'center', p: 3 }}>
+            No transactions found for {selectedCategory}
+          </Typography>
+        ) : (
+          transactions.map((transaction) => (
+            <TransactionCard key={transaction.transactionId}>
+              <TransactionDetails>
+                <Amount type={transaction.amountIn ? 'cashIn' : 'cashOut'}>
+                  {transaction.amountIn ? '+' : '-'}₹{transaction.amount}
+                </Amount>
+                <Box>
+                  <Label>Receiver Name</Label>
+                  <Value>{transaction.receiverName}</Value>
+                </Box>
+                <Box>
+                  <Label>Description</Label>
+                  <Value>{transaction.reason}</Value>
+                </Box>
+                <Box>
+                  <Label>Category</Label>
+                  <Value>{transaction.category}</Value>
+                </Box>
+                <Box>
+                  <Label>Date</Label>
+                  <Value>{getTransactionDate(transaction)}</Value>
+                </Box>
+              </TransactionDetails>
+            </TransactionCard>
+          ))
+        )}
       </TransactionList>
 
       <AddTransaction 
