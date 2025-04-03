@@ -27,4 +27,17 @@ export interface TransactionResponse {
   orgId: string;
   updates: any[];
   amountIn: boolean;
+}
+
+export interface Transaction {
+  transactionId: string;
+  category: string;
+  customFields: CustomField[];
+  receiverName: string;
+  senderName: string;
+  reason: string;
+  amount: number;
+  orgId: string;
+  updates: any[];
+  amountIn: boolean;
 } 
